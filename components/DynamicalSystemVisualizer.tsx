@@ -255,14 +255,13 @@ export default function DynamicalSystemVisualizer() {
     <div className="flex flex-col lg:flex-row gap-6">
       <div className="flex-1">
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4">
-          <div className="relative border-2 border-slate-300 dark:border-slate-600 rounded overflow-hidden">
+          <div className="relative border-2 border-slate-300 dark:border-slate-600 rounded overflow-auto max-h-[min(800px,85vh)]">
             <svg
               ref={svgRef}
               width="800"
               height="800"
               viewBox="0 0 800 800"
               className="bg-white dark:bg-slate-900 cursor-move"
-              style={{ touchAction: 'none' }}
               onClick={handleCanvasClick}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}

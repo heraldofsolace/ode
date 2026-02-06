@@ -301,7 +301,6 @@ export default function PopulationModelVisualizer() {
               width={PLOT_WIDTH}
               height={PLOT_HEIGHT}
               className="w-full max-w-full cursor-move"
-              style={{ touchAction: 'none' }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
