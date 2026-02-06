@@ -253,7 +253,7 @@ export default function DynamicalSystemVisualizer() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      <div className="flex-1">
+      <div className="flex-1 order-2 lg:order-1">
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4">
           <div className="relative border-2 border-slate-300 dark:border-slate-600 rounded overflow-auto max-h-[min(800px,85vh)]">
             <svg
@@ -376,7 +376,7 @@ export default function DynamicalSystemVisualizer() {
         </div>
       </div>
 
-      <div className="w-full lg:w-80 space-y-4">
+      <div className="w-full lg:w-80 space-y-4 order-1 lg:order-2 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
         <ControlPanel
           time={time}
           onTimeChange={setTime}

@@ -184,7 +184,7 @@ export default function PopulationModelVisualizer() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      <div className="flex-1">
+      <div className="flex-1 order-2 lg:order-1">
         <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4">
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -218,13 +218,14 @@ export default function PopulationModelVisualizer() {
               </label>
               <input
                 type="number"
-                min={0.01}
+                min={-5}
                 max={5}
                 step={0.1}
                 value={params.r}
-                onChange={(e) =>
-                  setParams((p) => ({ ...p, r: parseFloat(e.target.value) || 0.1 }))
-                }
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setParams((p) => ({ ...p, r: Number.isFinite(v) ? v : 0.1 }));
+                }}
                 className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -581,8 +582,8 @@ export default function PopulationModelVisualizer() {
         </div>
       </div>
 
-      <div className="w-full lg:w-72 shrink-0">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4 sticky top-4">
+      <div className="w-full lg:w-72 shrink-0 order-1 lg:order-2 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
             Equations
           </h3>
