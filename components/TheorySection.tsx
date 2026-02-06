@@ -97,6 +97,42 @@ export function TheorySection() {
             </div>
           </section>
 
+          {/* Fixed Points Section */}
+          <section>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+              <span className="text-amber-500">●</span>
+              Fixed Points
+            </h3>
+            <div className="pl-6 space-y-2">
+              <p>
+                A <strong>fixed point</strong> (or <em>equilibrium</em>) of the system <InlineMath math="\dot{\mathbf{x}} = \mathbf{f}(\mathbf{x})" /> is a point <InlineMath math="\mathbf{x}^*" /> where the vector field vanishes—i.e. where nothing moves:
+              </p>
+              <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-lg my-3 flex justify-center">
+                <BlockMath math="\mathbf{f}(\mathbf{x}^*) = \mathbf{0}" />
+              </div>
+              <p>
+                At a fixed point, <InlineMath math="\phi(t, \mathbf{x}^*) = \mathbf{x}^*" /> for all <InlineMath math="t" />: a solution starting there stays there. Fixed points are found by solving <InlineMath math="\mathbf{f}(\mathbf{x}) = \mathbf{0}" />; the app locates them numerically and classifies them using <strong>linearization</strong>.
+              </p>
+              <p>
+                <strong>Linearization:</strong> Near a fixed point <InlineMath math="\mathbf{x}^*" /> we approximate the dynamics by the linear system <InlineMath math="\dot{\mathbf{y}} = D\mathbf{f}(\mathbf{x}^*)\, \mathbf{y}" /> where <InlineMath math="\mathbf{y} = \mathbf{x} - \mathbf{x}^*" /> and <InlineMath math="D\mathbf{f}" /> is the Jacobian matrix. The behaviour near the equilibrium is determined by the <strong>eigenvalues</strong> of <InlineMath math="D\mathbf{f}(\mathbf{x}^*)" />.
+              </p>
+              <p>
+                <strong>Classification (planar systems):</strong>
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-4">
+                <li><strong>Stable node:</strong> both eigenvalues real and negative; trajectories approach the point along (possibly different) directions.</li>
+                <li><strong>Unstable node:</strong> both eigenvalues real and positive; trajectories leave the point.</li>
+                <li><strong>Saddle:</strong> eigenvalues real with opposite signs; one attracting direction, one repelling; only trajectories on the stable manifold approach the point.</li>
+                <li><strong>Stable spiral:</strong> complex eigenvalues with negative real part; trajectories spiral in.</li>
+                <li><strong>Unstable spiral:</strong> complex eigenvalues with positive real part; trajectories spiral out.</li>
+                <li><strong>Center:</strong> purely imaginary eigenvalues; trajectories form closed loops around the point (no growth or decay).</li>
+              </ul>
+              <p className="mt-3">
+                In the visualization, enable <strong>Fixed points</strong> in the controls to see equilibria drawn on the phase portrait, with colours indicating type (e.g. green = stable node, red = unstable node, orange = saddle). The Fixed Points panel lists coordinates and eigenvalues for each equilibrium.
+              </p>
+            </div>
+          </section>
+
           {/* Connection Section */}
           <section className="border-t border-slate-200 dark:border-slate-700 pt-4">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">

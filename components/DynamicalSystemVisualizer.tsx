@@ -351,6 +351,16 @@ export default function DynamicalSystemVisualizer() {
                   parameters={parameters}
                 />
               )}
+
+              {/* Fixed points */}
+              {showFixedPoints && (
+                <FixedPoints
+                  fixedPoints={fixedPoints}
+                  transform={transform}
+                  centerX={centerX}
+                  centerY={centerY}
+                />
+              )}
             </svg>
           </div>
           <div className="flex items-center justify-between mt-2">
@@ -368,20 +378,6 @@ export default function DynamicalSystemVisualizer() {
       </div>
 
       <div className="w-full lg:w-80 space-y-4">
-        <SystemSelector
-          systemType={systemType}
-          onSystemChange={setSystemType}
-          parameters={parameters}
-        />
-        
-        <ParameterControls
-          systemType={systemType}
-          parameters={parameters}
-          onParametersChange={setParameters}
-        />
-        
-        <FixedPointsInfo fixedPoints={fixedPoints} />
-        
         <ControlPanel
           time={time}
           onTimeChange={setTime}
@@ -401,6 +397,17 @@ export default function DynamicalSystemVisualizer() {
           onToggleFixedPoints={() => setShowFixedPoints(!showFixedPoints)}
           onClearPoints={clearPoints}
         />
+        <SystemSelector
+          systemType={systemType}
+          onSystemChange={setSystemType}
+          parameters={parameters}
+        />
+        <ParameterControls
+          systemType={systemType}
+          parameters={parameters}
+          onParametersChange={setParameters}
+        />
+        <FixedPointsInfo fixedPoints={fixedPoints} />
       </div>
     </div>
   );
