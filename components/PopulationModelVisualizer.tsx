@@ -8,6 +8,10 @@ import {
   populationAtTime,
   slopeAt,
 } from '@/lib/populationModels';
+import {
+  getEpidemicCurvePoints,
+  epidemicCompartmentAtTime,
+} from '@/lib/epidemicModels';
 
 const PLOT_WIDTH = 700;
 const PLOT_HEIGHT = 400;
@@ -31,16 +35,64 @@ export default function PopulationModelVisualizer() {
   const animationRef = useRef<number | undefined>(undefined);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const curvePoints = getCurvePoints(modelType, params, tMax);
-  const currentP = populationAtTime(modelType, params, time);
+  const isEpidemic = modelType === 'si' || modelType === 'sis' || modelType === 'sir';
+  const curvePoints = isEpidemic ? [] : getCurvePoints(modelType, params, tMax);
+  const epidemicCurves = isEpidemic
+    ? getEpidemicCurvePoints(modelType, {
+        beta: params.beta ?? 0.002,
+        gamma: params.gamma ?? 0.1,
+        N: params.N ?? 100,
+        S0: params.S0 ?? Math.max(0, (params.N ?? 100) - (params.I0 ?? 1)),
+        I0: params.I0 ?? 1,
+        R0: params.R0 ?? 0,
+      }, tMax)
+    : null;
+  const currentP = isEpidemic ? 0 : populationAtTime(modelType, params, time);
+  const currentEpidemic = isEpidemic
+    ? {
+        S: epidemicCompartmentAtTime(modelType, {
+          beta: params.beta ?? 0.002,
+          gamma: params.gamma ?? 0.1,
+          N: params.N ?? 100,
+          S0: params.S0 ?? Math.max(0, (params.N ?? 100) - (params.I0 ?? 1)),
+          I0: params.I0 ?? 1,
+          R0: params.R0 ?? 0,
+        }, time, 'S'),
+        I: epidemicCompartmentAtTime(modelType, {
+          beta: params.beta ?? 0.002,
+          gamma: params.gamma ?? 0.1,
+          N: params.N ?? 100,
+          S0: params.S0 ?? Math.max(0, (params.N ?? 100) - (params.I0 ?? 1)),
+          I0: params.I0 ?? 1,
+          R0: params.R0 ?? 0,
+        }, time, 'I'),
+        R: modelType === 'sir'
+          ? epidemicCompartmentAtTime(modelType, {
+              beta: params.beta ?? 0.002,
+              gamma: params.gamma ?? 0.1,
+              N: params.N ?? 100,
+              S0: params.S0 ?? Math.max(0, (params.N ?? 100) - (params.I0 ?? 1)),
+              I0: params.I0 ?? 1,
+              R0: params.R0 ?? 0,
+            }, time, 'R')
+          : undefined,
+      }
+    : null;
 
   const tMin = 0;
   const pMin = 0;
-  const pMax = Math.max(
-    ...curvePoints.map(([, P]) => P),
-    params.P0 * 1.1,
-    (params.K ?? params.P0 * 2) * 1.1
-  );
+  const pMax = isEpidemic && epidemicCurves
+    ? Math.max(
+        ...epidemicCurves.S.map(([, y]) => y),
+        ...epidemicCurves.I.map(([, y]) => y),
+        ...(epidemicCurves.R ?? []).map(([, y]) => y),
+        (params.N ?? 100) * 1.05
+      )
+    : Math.max(
+        ...curvePoints.map(([, P]) => P),
+        params.P0 * 1.1,
+        (params.K ?? params.P0 * 2) * 1.1
+      );
   const pMaxPlot = pMax * 1.05;
 
   const [view, setView] = useState(() => ({
@@ -142,9 +194,17 @@ export default function PopulationModelVisualizer() {
     .map(([t, P], i) => `${i === 0 ? 'M' : 'L'} ${scaleX(t)} ${scaleY(P)}`)
     .join(' ');
 
+  const epidemicPathD = epidemicCurves
+    ? {
+        S: epidemicCurves.S.map(([t, P], i) => `${i === 0 ? 'M' : 'L'} ${scaleX(t)} ${scaleY(P)}`).join(' '),
+        I: epidemicCurves.I.map(([t, P], i) => `${i === 0 ? 'M' : 'L'} ${scaleX(t)} ${scaleY(P)}`).join(' '),
+        R: epidemicCurves.R?.map(([t, P], i) => `${i === 0 ? 'M' : 'L'} ${scaleX(t)} ${scaleY(P)}`).join(' '),
+      }
+    : null;
+
   const pointsUpToTime = curvePoints.filter(([t]) => t <= time);
   const areaPathD =
-    pointsUpToTime.length === 0
+    isEpidemic || pointsUpToTime.length === 0
       ? ''
       : pointsUpToTime
           .map(([t, P], i) => `${i === 0 ? 'M' : 'L'} ${scaleX(t)} ${scaleY(P)}`)
@@ -201,17 +261,140 @@ export default function PopulationModelVisualizer() {
                 if (next === 'exponentialHarvesting' && params.H == null) {
                   setParams((p) => ({ ...p, H: 2 }));
                 }
+                if (next === 'allee' && params.A == null) {
+                  setParams((p) => ({ ...p, K: p.K ?? 100, A: Math.min(20, (p.K ?? 100) / 5) }));
+                }
+                if ((next === 'si' || next === 'sis' || next === 'sir') && params.beta == null) {
+                  setParams((p) => ({
+                    ...p,
+                    beta: 0.002,
+                    gamma: next === 'si' ? 0 : 0.1,
+                    N: 100,
+                    S0: 99,
+                    I0: 1,
+                    R0: next === 'sir' ? 0 : undefined,
+                  }));
+                }
               }}
               className="w-full max-w-xs px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
             >
-              <option value="exponential">Exponential: dP/dt = rP</option>
+              <option value="exponential">Exponential (Malthusian): dP/dt = rP</option>
               <option value="exponentialHarvesting">Exponential + harvesting: dP/dt = rP − H</option>
-              <option value="logistic">Logistic: dP/dt = rP(1 − P/K)</option>
+              <option value="logistic">Logistic (Verhulst–Pearl): dP/dt = rP(1 − P/K)</option>
+              <option value="allee">Allee effect: dP/dt = (r/K)P(1 − P/K)(P − A)</option>
               <option value="harvesting">Logistic + harvesting: dP/dt = rP(1 − P/K) − H</option>
+              <option value="si">Epidemic SI (Kermack–McKendrick)</option>
+              <option value="sis">Epidemic SIS (Kermack–McKendrick)</option>
+              <option value="sir">Epidemic SIR (Kermack–McKendrick)</option>
             </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            {isEpidemic ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Transmission rate β
+                  </label>
+                  <input
+                    type="number"
+                    min={0.0001}
+                    max={1}
+                    step={0.0001}
+                    value={params.beta ?? 0.002}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setParams((p) => ({ ...p, beta: Number.isFinite(v) ? v : 0.002 }));
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                {(modelType === 'sis' || modelType === 'sir') && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Recovery rate γ
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={2}
+                      step={0.01}
+                      value={params.gamma ?? 0.1}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        setParams((p) => ({ ...p, gamma: Number.isFinite(v) ? v : 0.1 }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Total population N
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={params.N ?? 100}
+                    onChange={(e) =>
+                      setParams((p) => ({ ...p, N: Math.max(1, parseFloat(e.target.value) || 1) }))
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Initial infected I₀
+                  </label>
+                  <input
+                    type="number"
+                    min={0.1}
+                    step={1}
+                    value={params.I0 ?? 1}
+                    onChange={(e) =>
+                      setParams((p) => ({ ...p, I0: Math.max(0, parseFloat(e.target.value) || 0) }))
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                {modelType === 'sir' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Initial susceptible S₀
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={params.S0 ?? 99}
+                        onChange={(e) =>
+                          setParams((p) => ({ ...p, S0: Math.max(0, parseFloat(e.target.value) || 0) }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Initial recovered R₀
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={params.R0 ?? 0}
+                        onChange={(e) =>
+                          setParams((p) => ({ ...p, R0: Math.max(0, parseFloat(e.target.value) || 0) }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Growth rate r
@@ -244,7 +427,7 @@ export default function PopulationModelVisualizer() {
                 className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
               />
             </div>
-            {(modelType === 'logistic' || modelType === 'harvesting') && (
+            {(modelType === 'logistic' || modelType === 'harvesting' || modelType === 'allee') && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Carrying capacity K
@@ -256,6 +439,23 @@ export default function PopulationModelVisualizer() {
                   value={params.K ?? 100}
                   onChange={(e) =>
                     setParams((p) => ({ ...p, K: parseFloat(e.target.value) || 1 }))
+                  }
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+            )}
+            {modelType === 'allee' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Allee threshold A
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={params.A ?? 20}
+                  onChange={(e) =>
+                    setParams((p) => ({ ...p, A: Math.max(0, parseFloat(e.target.value) || 0) }))
                   }
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                 />
@@ -277,6 +477,8 @@ export default function PopulationModelVisualizer() {
                   className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                 />
               </div>
+            )}
+              </>
             )}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -379,8 +581,8 @@ export default function PopulationModelVisualizer() {
                 />
               )}
               <g clipPath="url(#plotClip)">
-                {/* Slope field */}
-                {showSlopeField && (() => {
+                {/* Slope field (population models only) */}
+                {showSlopeField && !isEpidemic && (() => {
                   const rangeT = view.tMax - view.tMin || 1;
                   const rangeP = view.pMax - view.pMin || 1;
                   const nt = 18;
@@ -410,8 +612,8 @@ export default function PopulationModelVisualizer() {
                     </g>
                   );
                 })()}
-                {/* Carrying capacity line (logistic and harvesting) */}
-                {(modelType === 'logistic' || modelType === 'harvesting') &&
+                {/* Carrying capacity line (logistic, harvesting, allee) */}
+                {(modelType === 'logistic' || modelType === 'harvesting' || modelType === 'allee') &&
                   params.K != null &&
                   view.pMin <= params.K &&
                   params.K <= view.pMax && (
@@ -437,28 +639,82 @@ export default function PopulationModelVisualizer() {
                       </text>
                     </>
                   )}
-                {/* Area under curve up to current time */}
+                {/* Allee threshold line (allee only) */}
+                {modelType === 'allee' &&
+                  params.A != null &&
+                  params.A > 0 &&
+                  view.pMin <= params.A &&
+                  params.A <= view.pMax && (
+                    <>
+                      <line
+                        x1={PADDING.left}
+                        y1={scaleY(params.A)}
+                        x2={PADDING.left + INNER_WIDTH}
+                        y2={scaleY(params.A)}
+                        stroke="#b45309"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
+                      />
+                      <text
+                        x={PADDING.left + INNER_WIDTH - 4}
+                        y={scaleY(params.A) + 14}
+                        textAnchor="end"
+                        fill="#b45309"
+                        fontSize="11"
+                        fontWeight="600"
+                      >
+                        A = {params.A}
+                      </text>
+                    </>
+                  )}
+                {/* Area under curve up to current time (population only) */}
                 {areaPathD && (
                   <path d={areaPathD} fill="url(#curveGrad)" />
                 )}
-                {/* Full curve */}
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                {/* Current point */}
-                <circle
-                cx={scaleX(time)}
-                cy={scaleY(currentP)}
-                r="6"
-                fill="#ef4444"
-                stroke="white"
-                strokeWidth="2"
-              />
+                {/* Curves: population (single) or epidemic (S, I, R) */}
+                {isEpidemic && epidemicPathD ? (
+                  <>
+                    <path d={epidemicPathD.S} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d={epidemicPathD.I} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    {epidemicPathD.R != null && (
+                      <path d={epidemicPathD.R} fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    )}
+                    {currentEpidemic && (
+                      <>
+                        <circle cx={scaleX(time)} cy={scaleY(currentEpidemic.S)} r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+                        <circle cx={scaleX(time)} cy={scaleY(currentEpidemic.I)} r="5" fill="#dc2626" stroke="white" strokeWidth="1.5" />
+                        {currentEpidemic.R !== undefined && (
+                          <circle cx={scaleX(time)} cy={scaleY(currentEpidemic.R)} r="5" fill="#16a34a" stroke="white" strokeWidth="1.5" />
+                        )}
+                      </>
+                    )}
+                    {/* Legend */}
+                    <g fontSize="10" fill="#475569">
+                      <line x1={PADDING.left + INNER_WIDTH - 90} y1={PADDING.top + 12} x2={PADDING.left + INNER_WIDTH - 75} y2={PADDING.top + 12} stroke="#3b82f6" strokeWidth="2" />
+                      <text x={PADDING.left + INNER_WIDTH - 72} y={PADDING.top + 15} fill="#3b82f6">S</text>
+                      <line x1={PADDING.left + INNER_WIDTH - 55} y1={PADDING.top + 12} x2={PADDING.left + INNER_WIDTH - 40} y2={PADDING.top + 12} stroke="#dc2626" strokeWidth="2" />
+                      <text x={PADDING.left + INNER_WIDTH - 37} y={PADDING.top + 15} fill="#dc2626">I</text>
+                      {modelType === 'sir' && (
+                        <>
+                          <line x1={PADDING.left + INNER_WIDTH - 22} y1={PADDING.top + 12} x2={PADDING.left + INNER_WIDTH - 7} y2={PADDING.top + 12} stroke="#16a34a" strokeWidth="2" />
+                          <text x={PADDING.left + INNER_WIDTH - 4} y={PADDING.top + 15} fill="#16a34a">R</text>
+                        </>
+                      )}
+                    </g>
+                  </>
+                ) : (
+                  <>
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx={scaleX(time)} cy={scaleY(currentP)} r="6" fill="#ef4444" stroke="white" strokeWidth="2" />
+                  </>
+                )}
               </g>
               {/* Axis labels */}
               <text
@@ -478,7 +734,7 @@ export default function PopulationModelVisualizer() {
                 fontSize="12"
                 transform={`rotate(-90, 12, ${PADDING.top + INNER_HEIGHT / 2})`}
               >
-                P (population)
+                {isEpidemic ? 'S, I, R (compartments)' : 'P (population)'}
               </text>
               <text
                 x={PADDING.left}
@@ -576,7 +832,18 @@ export default function PopulationModelVisualizer() {
               </button>
             </div>
             <div className="text-sm text-slate-600 dark:text-slate-400">
-              P({time.toFixed(2)}) = <strong>{currentP.toFixed(2)}</strong>
+              {isEpidemic && currentEpidemic ? (
+                <>
+                  S({time.toFixed(2)}) = <strong className="text-blue-600">{currentEpidemic.S.toFixed(1)}</strong>
+                  {' · '}
+                  I({time.toFixed(2)}) = <strong className="text-red-600">{currentEpidemic.I.toFixed(1)}</strong>
+                  {currentEpidemic.R !== undefined && (
+                    <> · R({time.toFixed(2)}) = <strong className="text-green-600">{currentEpidemic.R.toFixed(1)}</strong></>
+                  )}
+                </>
+              ) : (
+                <>P({time.toFixed(2)}) = <strong>{currentP.toFixed(2)}</strong></>
+              )}
             </div>
           </div>
         </div>
@@ -596,7 +863,7 @@ export default function PopulationModelVisualizer() {
                 <strong>Solution:</strong> P(t) = P₀ e<sup>rt</sup>
               </p>
               <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
-                Unbounded growth; population grows exponentially with rate r.
+                Unbounded growth; population grows exponentially with rate r. Also called the <strong>Malthusian</strong> model (Thomas Malthus, 1798).
               </p>
             </div>
           )}
@@ -609,7 +876,7 @@ export default function PopulationModelVisualizer() {
                 <strong>Solution:</strong> P(t) = K / (1 + ((K−P₀)/P₀) e<sup>−rt</sup>)
               </p>
               <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
-                Growth levels off at carrying capacity K.
+                Growth levels off at carrying capacity K. Also called the <strong>Verhulst–Pearl</strong> or logistic equation (Verhulst 1838; Pearl &amp; Reed 1920).
               </p>
             </div>
           )}
@@ -626,6 +893,16 @@ export default function PopulationModelVisualizer() {
               </p>
             </div>
           )}
+          {modelType === 'allee' && (
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+              <p>
+                <strong>ODE:</strong> dP/dt = (r/K) P (1 − P/K)(P − A)
+              </p>
+              <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
+                <strong>Allee effect:</strong> at low density (P &lt; A) the population declines to extinction; above the threshold A it grows toward K. Equilibria: P = 0 and P = K (stable), P = A (unstable). No closed-form solution; solved numerically.
+              </p>
+            </div>
+          )}
           {modelType === 'harvesting' && (
             <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
               <p>
@@ -633,6 +910,45 @@ export default function PopulationModelVisualizer() {
               </p>
               <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
                 Logistic growth with constant harvest rate H. No closed-form solution; solved numerically. High H can cause extinction (overharvesting).
+              </p>
+            </div>
+          )}
+          {modelType === 'si' && (
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+              <p>
+                <strong>ODEs:</strong> dS/dt = −βSI, dI/dt = βSI
+              </p>
+              <p>
+                <strong>Constraint:</strong> S + I = N (constant). So dI/dt = βI(N − I) (logistic in I).
+              </p>
+              <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
+                <strong>SI (Kermack–McKendrick):</strong> No recovery; everyone eventually infected. I(t) = N / (1 + ((N−I₀)/I₀)e<sup>−βNt</sup>).
+              </p>
+            </div>
+          )}
+          {modelType === 'sis' && (
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+              <p>
+                <strong>ODEs:</strong> dS/dt = −βSI + γI, dI/dt = βSI − γI
+              </p>
+              <p>
+                <strong>Constraint:</strong> S + I = N. With K = N − γ/β: dI/dt = βI(K − I) when K &gt; 0.
+              </p>
+              <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
+                <strong>SIS:</strong> Recovery with no immunity; infectives return to susceptible. Endemic equilibrium when R₀ = βN/γ &gt; 1.
+              </p>
+            </div>
+          )}
+          {modelType === 'sir' && (
+            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+              <p>
+                <strong>ODEs:</strong> dS/dt = −βSI, dI/dt = βSI − γI, dR/dt = γI
+              </p>
+              <p>
+                <strong>Constraint:</strong> S + I + R = N. Basic reproduction number R₀ = βN/γ.
+              </p>
+              <p className="text-slate-600 dark:text-slate-400 text-xs mt-2">
+                <strong>SIR (Kermack–McKendrick):</strong> Recovery with permanent immunity. No closed-form solution; solved numerically. Epidemic peak and final size depend on R₀ and initial conditions.
               </p>
             </div>
           )}
