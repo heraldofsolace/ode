@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/', label: 'Dynamical Systems' },
   { href: '/population', label: 'Population Modelling' },
+  { href: '/epidemic', label: 'Epidemic models' },
 ];
 
 export function Nav() {

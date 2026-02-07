@@ -92,6 +92,36 @@ export function sirSolution(
   return { S, I, R };
 }
 
+/** Run SIR from 0 to tMax once, return max I and final R (for bifurcation curve). */
+function sirMaxAndFinal(
+  beta: number,
+  gamma: number,
+  S0: number,
+  I0: number,
+  R0: number,
+  tMax: number,
+  dt: number = 0.05
+): { maxI: number; finalR: number } {
+  let S = Math.max(0, S0);
+  let I = Math.max(0, I0);
+  let R = Math.max(0, R0);
+  let time = 0;
+  let maxI = I;
+  while (time < tMax) {
+    const step = Math.min(dt, tMax - time);
+    const [dS1, dI1, dR1] = sirRhs(S, I, R, beta, gamma);
+    const [dS2, dI2, dR2] = sirRhs(S + (step / 2) * dS1, I + (step / 2) * dI1, R + (step / 2) * dR1, beta, gamma);
+    const [dS3, dI3, dR3] = sirRhs(S + (step / 2) * dS2, I + (step / 2) * dI2, R + (step / 2) * dR2, beta, gamma);
+    const [dS4, dI4, dR4] = sirRhs(S + step * dS3, I + step * dI3, R + step * dR3, beta, gamma);
+    S = Math.max(0, S + (step / 6) * (dS1 + 2 * dS2 + 2 * dS3 + dS4));
+    I = Math.max(0, I + (step / 6) * (dI1 + 2 * dI2 + 2 * dI3 + dI4));
+    R = Math.max(0, R + (step / 6) * (dR1 + 2 * dR2 + 2 * dR3 + dR4));
+    if (I > maxI) maxI = I;
+    time += step;
+  }
+  return { maxI, finalR: R };
+}
+
 export function getEpidemicCurvePoints(
   model: EpidemicModelType,
   params: EpidemicParams,
@@ -146,4 +176,63 @@ export function epidemicCompartmentAtTime(
   }
   const { S, I, R } = sirSolution(t, beta, gamma, S0, I0, R0);
   return compartment === 'S' ? S : compartment === 'I' ? I : R;
+}
+
+// --- Bifurcation / threshold diagrams ---
+
+/** SIS: transcritical bifurcation at R₀ = 1. Equilibrium I*//N vs R₀. Returns plottable branches. */
+export function getSISBifurcationData(
+  r0Min: number = 0.2,
+  r0Max: number = 4,
+  numPoints: number = 120
+): {
+  stableDF: Array<[number, number]>;   // (R0, 0) for R0 <= 1
+  unstableDF: Array<[number, number]>; // (R0, 0) for R0 >= 1
+  endemic: Array<[number, number]>;     // (R0, 1 - 1/R0) for R0 > 1
+} {
+  const stableDF: Array<[number, number]> = [];
+  const unstableDF: Array<[number, number]> = [];
+  const endemic: Array<[number, number]> = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const R0 = r0Min + (i / numPoints) * (r0Max - r0Min);
+    if (R0 <= 1) stableDF.push([R0, 0]);
+    if (R0 >= 1) unstableDF.push([R0, 0]);
+    if (R0 > 1) endemic.push([R0, 1 - 1 / R0]);
+  }
+  return { stableDF, unstableDF, endemic };
+}
+
+let sirThresholdCache: { r0: number[]; peakIN: number[]; finalRN: number[] } | null = null;
+
+/** SIR: peak I/N and final R/N vs R₀. One integration per R₀. Cached for N=100, gamma=0.1. */
+export function getSIRThresholdData(
+  N: number,
+  gamma: number,
+  r0Min: number = 0.2,
+  r0Max: number = 4,
+  numR0: number = 45,
+  tMax: number = 250,
+  _numSamples?: number
+): { r0: number[]; peakIN: number[]; finalRN: number[] } {
+  if (sirThresholdCache != null && N === 100 && gamma === 0.1) {
+    return sirThresholdCache;
+  }
+  const r0: number[] = [];
+  const peakIN: number[] = [];
+  const finalRN: number[] = [];
+  const S0 = N - 1;
+  const I0 = 1;
+  const R0init = 0;
+  for (let j = 0; j <= numR0; j++) {
+    const R0val = r0Min + (j / numR0) * (r0Max - r0Min);
+    const beta = (R0val * gamma) / N;
+    const { maxI, finalR } = sirMaxAndFinal(beta, gamma, S0, I0, R0init, tMax, 0.05);
+    r0.push(R0val);
+    peakIN.push(maxI / N);
+    finalRN.push(finalR / N);
+  }
+  if (N === 100 && gamma === 0.1) {
+    sirThresholdCache = { r0, peakIN, finalRN };
+  }
+  return { r0, peakIN, finalRN };
 }

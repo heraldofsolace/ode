@@ -1,6 +1,5 @@
 export type PopulationModelType =
-  | 'exponential' | 'logistic' | 'harvesting' | 'exponentialHarvesting' | 'allee'
-  | 'si' | 'sis' | 'sir';
+  | 'exponential' | 'logistic' | 'harvesting' | 'exponentialHarvesting' | 'allee';
 
 export interface PopulationParams {
   r: number;   // growth rate
@@ -8,13 +7,6 @@ export interface PopulationParams {
   K?: number;  // carrying capacity (logistic, harvesting, allee)
   H?: number;  // constant harvest rate (harvesting, exponentialHarvesting)
   A?: number;  // Allee threshold (allee only)
-  // Epidemic (Kermack–McKendrick): SI, SIS, SIR
-  beta?: number;  // transmission rate
-  gamma?: number; // recovery rate (SIS, SIR)
-  N?: number;    // total population (epidemic)
-  S0?: number;   // initial susceptible (SIR)
-  I0?: number;   // initial infected (epidemic)
-  R0?: number;   // initial recovered (SIR)
 }
 
 // Exponential growth: dP/dt = rP  =>  P(t) = P0 * e^(rt)
@@ -119,10 +111,6 @@ export function populationAtTime(
   if (model === 'allee') {
     return alleeSolution(P0, r, K, A, t);
   }
-  // Epidemic models (si, sis, sir) are handled by epidemicModels.ts in the UI
-  if (model === 'si' || model === 'sis' || model === 'sir') {
-    return 0;
-  }
   return logisticSolution(P0, r, K, t);
 }
 
@@ -146,9 +134,6 @@ export function slopeAt(
   if (model === 'allee') {
     return alleeRhs(P, r, K, A);
   }
-  if (model === 'si' || model === 'sis' || model === 'sir') {
-    return 0; // slope field not used for epidemic (multi-compartment)
-  }
   return r * P * (1 - P / K);
 }
 
@@ -166,4 +151,69 @@ export function getCurvePoints(
     points.push([t, P]);
   }
   return points;
+}
+
+// --- Bifurcation data for population models ---
+
+/** Logistic + harvesting: dP/dt = rP(1−P/K)−H. Equilibria at H ≤ rK/4: P = K/2 ± (K/(2r))√(r²−4rH/K). Saddle-node at H = rK/4. */
+export function getHarvestingBifurcationData(
+  r: number,
+  K: number,
+  numPoints: number = 80
+): { H: number[]; PStable: number[]; PUnstable: number[] } {
+  const HCrit = (r * K) / 4;
+  const H: number[] = [];
+  const PStable: number[] = [];
+  const PUnstable: number[] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const Hi = (i / numPoints) * HCrit * 1.01;
+    H.push(Hi);
+    const disc = r * r - (4 * r * Hi) / K;
+    if (disc >= 0) {
+      const sqrtDisc = Math.sqrt(disc);
+      const P_low = (K / 2) - (K / (2 * r)) * sqrtDisc;
+      const P_high = (K / 2) + (K / (2 * r)) * sqrtDisc;
+      PUnstable.push(P_low);
+      PStable.push(P_high);
+    } else {
+      PUnstable.push(NaN);
+      PStable.push(NaN);
+    }
+  }
+  return { H, PStable, PUnstable };
+}
+
+/** Allee: equilibria at 0 (stable), A (unstable), K (stable). Bifurcation in A. */
+export function getAlleeBifurcationData(
+  K: number,
+  numPoints: number = 80
+): { A: number[]; PStableZero: number[]; PUnstable: number[]; PStableK: number[] } {
+  const A: number[] = [];
+  const PStableZero: number[] = [];
+  const PUnstable: number[] = [];
+  const PStableK: number[] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const Ai = (i / numPoints) * K;
+    A.push(Ai);
+    PStableZero.push(0);
+    PUnstable.push(Ai);
+    PStableK.push(K);
+  }
+  return { A, PStableZero, PUnstable, PStableK };
+}
+
+/** Exponential + harvesting: equilibrium P* = H/r (r > 0). */
+export function getExponentialHarvestingBifurcationData(
+  r: number,
+  HMax: number,
+  numPoints: number = 80
+): { H: number[]; P: number[] } {
+  const H: number[] = [];
+  const P: number[] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const Hi = (i / numPoints) * HMax;
+    H.push(Hi);
+    P.push(r > 0 ? Hi / r : 0);
+  }
+  return { H, P };
 }
