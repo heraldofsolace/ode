@@ -7,6 +7,7 @@ const navItems = [
   { href: '/', label: 'Dynamical Systems' },
   { href: '/population', label: 'Population Modelling' },
   { href: '/epidemic', label: 'Epidemic models' },
+  { href: '/interacting', label: 'Interacting systems' },
 ];
 
 export function Nav() {
